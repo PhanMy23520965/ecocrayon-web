@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ECOCRAYON</title>
+<meta name="description" content="ECOCRAYON – bộ màu sáp thiên nhiên. Khám phá màu từ rau củ, chơi trò chơi phân loại rác, tô màu và thực hành sống xanh.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Mali:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip" href="#view">Bỏ qua menu</a>
+
+<header class="topbar" id="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="#trang-chu" aria-label="ECOCRAYON – Trang chủ">
+      <span class="brand-mark" id="brand-mark"></span>
+      <span class="brand-name">ECOCRAYON</span>
+    </a>
+    <nav class="mainnav" aria-label="Điều hướng chính">
+      <a href="#vuon-mau" data-nav="mau">Khám phá màu</a>
+      <a href="#tro-choi" data-nav="choi">Trò chơi</a>
+      <a href="#to-mau" data-nav="to">Tô màu</a>
+      <a href="#thu-thach" data-nav="thuthach">Thử thách xanh</a>
+    </nav>
+    <div class="topbar-tools">
+      <a class="leafpill" href="#so-cua-be" id="leafpill" aria-label="Sổ của bé">
+        <span class="leafpill-ico" aria-hidden="true"></span>
+        <span class="leafpill-num" id="leaf-count">0</span>
+        <span class="leafpill-lbl">lá</span>
+      </a>
+      <button class="iconbtn" id="btn-sound" type="button" aria-pressed="true" title="Nhạc và âm thanh"><span class="sr">Nhạc và âm thanh</span></button>
+      <button class="iconbtn menubtn" id="btn-menu" type="button" aria-expanded="false" aria-controls="drawer" title="Menu"><span class="sr">Mở menu</span></button>
+    </div>
+  </div>
+</header>
+
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-panel" role="dialog" aria-label="Menu">
+    <a href="#trang-chu">Trang chủ</a>
+    <a href="#vuon-mau">Khám phá màu</a>
+    <a href="#tro-choi">Trò chơi</a>
+    <a href="#to-mau">Tô màu</a>
+    <a href="#thu-thach">Thử thách xanh</a>
+    <a href="#so-cua-be">Sổ của bé</a>
+    <a href="#tai-che">Góc tái chế</a>
+    <hr>
+    <a href="#phu-huynh">Phụ huynh &amp; giáo viên</a>
+    <a href="#ve-ecocrayon">Về ECOCRAYON</a>
+    <a href="#ma-qr">In thẻ mã QR (cho nhóm)</a>
+  </div>
+</div>
+
+<main id="view" tabindex="-1"></main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <div class="foot-brand">
+      <p class="foot-tag">Tô màu thiên nhiên – Khơi nguồn tri thức xanh</p>
+      <p class="foot-note">Bút sáp để vẽ, không ăn được. Bé dùng cùng người lớn.</p>
+    </div>
+    <form class="codebox" id="foot-code" autocomplete="off">
+      <label for="foot-code-in">Nhập mã trên thẻ màu</label>
+      <div class="codebox-row">
+        <input id="foot-code-in" name="code" placeholder="VD: NGHE" maxlength="12" spellcheck="false">
+        <button class="btn btn-sm" type="submit">Mở</button>
+      </div>
+      <p class="codebox-msg" aria-live="polite"></p>
+    </form>
+    <nav class="foot-links" aria-label="Liên kết cuối trang">
+      <a href="#ve-ecocrayon">Về ECOCRAYON</a>
+      <a href="#phu-huynh">Phụ huynh &amp; giáo viên</a>
+      <a href="#tai-che">Góc tái chế</a>
+      <a href="#ma-qr">In thẻ mã QR</a>
+    </nav>
+  </div>
+</footer>
+
+<nav class="tabbar" aria-label="Điều hướng nhanh">
+  <a href="#vuon-mau" data-nav="mau"><span class="tb-ico" data-ico="mau"></span>Màu</a>
+  <a href="#tro-choi" data-nav="choi"><span class="tb-ico" data-ico="choi"></span>Chơi</a>
+  <a href="#to-mau" data-nav="to"><span class="tb-ico" data-ico="to"></span>Tô</a>
+  <a href="#thu-thach" data-nav="thuthach"><span class="tb-ico" data-ico="thuthach"></span>Thử thách</a>
+  <a href="#so-cua-be" data-nav="so"><span class="tb-ico" data-ico="so"></span>Sổ của bé</a>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="modal" id="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div id="modal-body"></div>
+  </div>
+</div>
+<div id="confetti" aria-hidden="true"></div>
+<div id="print-root" aria-hidden="true"></div>
+
+<script src="js/vendor/qrcode.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/art.js"></script>
+<script src="js/app.js"></script>
+<script src="js/games.js"></script>
+<script src="js/studio.js"></script>
+<script>EC.start();</script>
+</body>
+</html>
