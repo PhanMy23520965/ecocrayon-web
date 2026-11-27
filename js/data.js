@@ -314,7 +314,7 @@ EC.RISKS = [
 
 EC.AGES = [
   { age: '5–6 tuổi', who: 'Mầm non lớn', time: '10–15 phút mỗi hoạt động',
-    do: ['Tô theo vùng trong tranh có sẵn', 'Ghép cặp chế độ Dễ (3 cặp)', 'Tìm bạn cùng màu trên trang màu', 'Bật Đọc to để trẻ nghe thay vì tự đọc'],
+    do: ['Tô theo vùng trong tranh có sẵn', 'Ghép cặp chế độ Dễ (3 cặp)', 'Tìm bạn cùng màu trên trang màu', 'Bấm nút loa nhỏ cạnh lời Bé Sáp để trẻ nghe thay vì tự đọc'],
     tip: 'Ngồi cạnh trẻ và hỏi về hình ảnh. Trẻ chưa cần nhớ tên chất màu.' },
   { age: '6–8 tuổi', who: 'Lớp 1–2', time: '15–20 phút',
     do: ['Đố vui chế độ Bé nhỏ, sau đó lên Bé lớn', 'Phân loại rác', 'Thử thách xanh ở nhà, có ba mẹ xác nhận', 'Kể chuyện từ bức tranh đã tô'],

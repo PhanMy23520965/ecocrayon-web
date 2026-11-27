@@ -22,18 +22,24 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
   };
 
-  /* ---------- Âm thanh ---------- */
+  /* ---------- Âm thanh: tiếng hiệu ứng + nhạc nền, chung một nút loa ---------- */
   var S = EC.sfx = {
     on: store.get('sound', true), ctx: null,
+    audio: function () {
+      try {
+        this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)();
+        if (this.ctx.state === 'suspended' && !document.hidden) this.ctx.resume();
+        return this.ctx;
+      } catch (e) { return null; }
+    },
     tone: function (f, d, type, t, vol) {
       var o = this.ctx.createOscillator(), g = this.ctx.createGain();
       o.type = type; o.frequency.value = f; g.gain.setValueAtTime(vol || 0.1, t); g.gain.exponentialRampToValueAtTime(0.001, t + d);
       o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t + d + 0.03);
     },
     play: function (kind) {
-      if (!this.on) return;
+      if (!this.on || !this.audio()) return;
       try {
-        this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)();
         var t = this.ctx.currentTime, self = this;
         if (kind === 'good') { this.tone(660, 0.12, 'triangle', t); this.tone(880, 0.18, 'triangle', t + 0.1); }
         else if (kind === 'bad') { this.tone(200, 0.2, 'sawtooth', t, 0.04); }
@@ -44,9 +50,70 @@
     }
   };
 
-  /* ---------- Đọc to tiếng Việt (giọng có sẵn trên máy) ---------- */
+  /* Nhạc nền: giai điệu hộp nhạc tự tạo bằng code (không cần file nhạc), 8 nhịp lặp lại.
+     Hợp âm C – Am – F – G – C – Am – F/G – C, nốt lấy từ âm giai ngũ cung để nghe vui, nhẹ. */
+  var M = EC.music = (function () {
+    var STEP = 0.3, LEVEL = 0.35, _ = 0;
+    var MEL = [
+      76,_,79,_,76,74,72,_,   69,_,72,_,76,_,74,_,   72,_,69,_,72,74,76,_,   74,_,_,_,71,_,67,_,
+      76,_,79,_,76,74,72,74,  76,_,72,_,69,_,72,_,   69,_,72,_,71,_,74,_,    72,_,_,_,_,_,_,_
+    ];
+    var BASS = [[48, 55], [45, 52], [41, 48], [43, 50], [48, 55], [45, 52], [41, 43], [48, 48]];
+    var hz = function (m) { return 440 * Math.pow(2, (m - 69) / 12); };
+    var m = { playing: false, bus: null, step: 0, next: 0, timer: null, ducked: false };
+
+    function note(ctx, midi, t, len, vol, type) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type; o.frequency.value = hz(midi);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      o.connect(g); g.connect(m.bus); o.start(t); o.stop(t + len + 0.05);
+    }
+    function schedule(ctx, i, t) {
+      var mel = MEL[i];
+      if (mel) {
+        var n = 1; while (n < 6 && i + n < MEL.length && !MEL[i + n]) n++;
+        note(ctx, mel, t, Math.min(n * STEP + 0.25, 1.6), 0.12, 'sine');
+        note(ctx, mel + 12, t, 0.35, 0.025, 'triangle');
+      }
+      if (i % 4 === 0) note(ctx, BASS[i >> 3][(i % 8) >> 2], t, 4 * STEP, 0.1, 'triangle');
+    }
+    function tick() {
+      var ctx = S.ctx; if (!ctx) return;
+      if (m.next < ctx.currentTime) m.next = ctx.currentTime + 0.05;
+      while (m.next < ctx.currentTime + 0.4) { schedule(ctx, m.step, m.next); m.next += STEP; m.step = (m.step + 1) % MEL.length; }
+    }
+    function level() { return m.ducked ? LEVEL * 0.25 : LEVEL; }
+
+    m.start = function () {
+      if (m.playing || !S.on) return;
+      var ctx = S.audio(); if (!ctx) return;
+      if (!m.bus) {
+        var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+        m.bus = ctx.createGain(); m.bus.gain.value = 0.0001;
+        m.bus.connect(lp); lp.connect(ctx.destination);
+      }
+      m.bus.gain.cancelScheduledValues(ctx.currentTime);
+      m.bus.gain.setTargetAtTime(level(), ctx.currentTime, 0.6);
+      m.step = 0; m.next = ctx.currentTime + 0.1; m.playing = true;
+      tick(); m.timer = setInterval(tick, 100);
+    };
+    m.stop = function () {
+      if (!m.playing) return;
+      m.playing = false; clearInterval(m.timer);
+      if (m.bus && S.ctx) { m.bus.gain.cancelScheduledValues(S.ctx.currentTime); m.bus.gain.setTargetAtTime(0.0001, S.ctx.currentTime, 0.12); }
+    };
+    m.duck = function (on) {
+      m.ducked = on;
+      if (m.playing && m.bus) m.bus.gain.setTargetAtTime(level(), S.ctx.currentTime, 0.15);
+    };
+    return m;
+  })();
+
+  /* ---------- Đọc to tiếng Việt (giọng có sẵn trên máy): nút loa nhỏ cạnh lời Bé Sáp ---------- */
   var V = EC.voice = {
-    ok: false, v: null, auto: store.get('voice', false),
+    ok: false, v: null, auto: false, tok: 0,
     init: function () {
       var self = this;
       if (!('speechSynthesis' in window)) { this.ui(); return; }
@@ -59,23 +126,25 @@
     },
     ui: function () {
       document.body.classList.toggle('no-voice', !this.ok);
-      var b = $('#btn-voice');
-      b.setAttribute('aria-pressed', String(this.ok && this.auto));
-      b.title = !this.ok ? 'Máy này chưa có giọng đọc tiếng Việt' : (this.auto ? 'Tắt đọc to' : 'Bật đọc to');
     },
     say: function (text, btn) {
       if (!this.ok || !text) return;
       try {
         window.speechSynthesis.cancel();
-        var u = new SpeechSynthesisUtterance(text);
+        var u = new SpeechSynthesisUtterance(text), tok = ++this.tok, self = this;
         u.voice = this.v; u.lang = this.v.lang; u.rate = 0.92; u.pitch = 1.05;
         $$('.say.speaking').forEach(function (b) { b.classList.remove('speaking'); });
-        if (btn) { btn.classList.add('speaking'); u.onend = u.onerror = function () { btn.classList.remove('speaking'); }; }
+        if (btn) btn.classList.add('speaking');
+        u.onend = u.onerror = function () {
+          if (btn) btn.classList.remove('speaking');
+          if (tok === self.tok) M.duck(false);
+        };
+        M.duck(true);
         window.speechSynthesis.speak(u);
-      } catch (e) { /* bỏ qua */ }
+      } catch (e) { M.duck(false); }
     },
     autoSay: function (text) { if (this.auto) this.say(text); },
-    stop: function () { try { window.speechSynthesis.cancel(); } catch (e) { /* bỏ qua */ } }
+    stop: function () { this.tok++; M.duck(false); try { window.speechSynthesis.cancel(); } catch (e) { /* bỏ qua */ } }
   };
   EC.sayBtn = function (text) { return '<button class="say" type="button" data-say="' + esc(text) + '" aria-label="Nghe đọc"></button>'; };
 
@@ -794,14 +863,28 @@
     bindCodeForm($('#foot-code'));
 
     var sb = $('#btn-sound');
-    sb.setAttribute('aria-pressed', String(S.on));
-    sb.addEventListener('click', function () { S.on = !S.on; store.set('sound', S.on); sb.setAttribute('aria-pressed', String(S.on)); EC.toast(S.on ? 'Đã bật âm thanh' : 'Đã tắt âm thanh'); S.play('pop'); });
-    V.init();
-    $('#btn-voice').addEventListener('click', function () {
-      if (!V.ok) { EC.toast('Máy này chưa có giọng đọc tiếng Việt.'); return; }
-      V.auto = !V.auto; store.set('voice', V.auto); V.ui();
-      if (V.auto) V.say('Đã bật đọc to.'); else { V.stop(); EC.toast('Đã tắt đọc to'); }
+    var soundUi = function () {
+      sb.setAttribute('aria-pressed', String(S.on));
+      sb.title = S.on ? 'Tắt nhạc và âm thanh' : 'Bật nhạc và âm thanh';
+    };
+    soundUi();
+    sb.addEventListener('click', function () {
+      S.on = !S.on; store.set('sound', S.on); soundUi();
+      if (S.on) { M.start(); S.play('pop'); EC.toast('Đã bật nhạc'); } else { M.stop(); EC.toast('Đã tắt nhạc'); }
     });
+    /* Trình duyệt chỉ cho phát tiếng sau lần chạm đầu tiên, nên nhạc bắt đầu từ lúc đó. */
+    var firstTouch = function () {
+      document.removeEventListener('pointerdown', firstTouch, true);
+      document.removeEventListener('keydown', firstTouch, true);
+      if (S.on) M.start();
+    };
+    document.addEventListener('pointerdown', firstTouch, true);
+    document.addEventListener('keydown', firstTouch, true);
+    document.addEventListener('visibilitychange', function () {
+      if (!S.ctx) return;
+      if (document.hidden) S.ctx.suspend(); else if (S.on) S.ctx.resume();
+    });
+    V.init();
     document.addEventListener('click', function (e) { var b = e.target.closest('.say'); if (b) { e.preventDefault(); V.say(b.getAttribute('data-say'), b); } });
 
     var drawer = $('#drawer'), mb = $('#btn-menu');
