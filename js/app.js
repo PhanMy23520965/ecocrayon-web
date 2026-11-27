@@ -148,15 +148,16 @@
   };
   EC.sayBtn = function (text) { return '<button class="say" type="button" data-say="' + esc(text) + '" aria-label="Nghe đọc"></button>'; };
 
-  /* ---------- Bé Sáp nói ---------- */
-  EC.mascotLine = function (text, mood, id) {
-    return '<div class="mascot-row"' + (id ? ' id="' + id + '"' : '') + '>' + A.mascot(mood || 'happy') +
+  /* ---------- Nhân vật nói (Bé Sáp hoặc nhân vật dẫn đường của vùng đất) ---------- */
+  function charArt(ch, mood) { return A.character ? A.character(ch || 'besap', mood || 'happy') : A.mascot(mood || 'happy'); }
+  EC.mascotLine = function (text, mood, id, ch) {
+    return '<div class="mascot-row"' + (id ? ' id="' + id + '"' : '') + (ch ? ' data-char="' + ch + '"' : '') + '>' + charArt(ch, mood) +
       '<div class="bubble"><p>' + esc(text) + '</p>' + EC.sayBtn(text) + '</div></div>';
   };
   EC.setBubble = function (row, text, mood) {
     if (!row) return;
     var old = $('.mascot', row);
-    var tmp = document.createElement('div'); tmp.innerHTML = A.mascot(mood || 'happy');
+    var tmp = document.createElement('div'); tmp.innerHTML = charArt(row.getAttribute('data-char'), mood);
     old.replaceWith(tmp.firstChild);
     $('.bubble p', row).textContent = text;
     $('.bubble .say', row).setAttribute('data-say', text);
@@ -164,26 +165,29 @@
     V.autoSay(text);
   };
 
-  /* ---------- Tiến trình: lá, huy hiệu, việc đã làm ---------- */
+  /* ---------- Tiến trình của người chơi đang dùng (khách hoặc hồ sơ đã đăng nhập) ----------
+     Dữ liệu thật nằm trong EC.db (bảng PlayerProgress); P.data luôn trỏ tới người chơi hiện tại. */
   var P = EC.progress = {
-    data: (function () { var d = store.get('progress', null); if (!d || typeof d !== 'object') d = {}; d.leaves = d.leaves || 0; d.stickers = d.stickers || {}; d.done = d.done || {}; d.name = d.name || ''; return d; })(),
-    save: function () { store.set('progress', this.data); document.dispatchEvent(new CustomEvent('ec:progress')); },
-    stage: function () { var s = 0, n = this.data.leaves; EC.TREE.forEach(function (t, i) { if (n >= t.at) s = i; }); return s; },
+    get data() { return EC.db.progress(EC.auth.pid()); },
+    save: function () { EC.db.save('progress'); document.dispatchEvent(new CustomEvent('ec:progress')); },
+    stage: function () { var s = 0, n = this.data.xp; EC.TREE.forEach(function (t, i) { if (n >= t.xp) s = i; }); return s; },
     isDone: function (id) { return !!this.data.done[id]; },
     has: function (id) { return !!this.data.stickers[id]; },
     mark: function (id) { if (this.data.done[id]) return false; this.data.done[id] = Date.now(); this.save(); return true; },
     add: function (n, why) {
-      var before = this.stage(); this.data.leaves += n; this.save();
-      var pill = $('#leafpill'); pill.classList.remove('pulse'); void pill.offsetWidth; pill.classList.add('pulse');
-      EC.toast('+' + n + ' lá · ' + why);
+      var before = this.stage(); this.data.xp += n; this.save();
+      EC.pulsePill();
+      EC.toast('+' + n + ' XP · ' + why);
       var after = this.stage(); if (after > before) queueAward({ tree: after });
+      if (EC.checkUnlocks) EC.checkUnlocks();
     },
     award: function (id) {
       if (this.data.stickers[id]) return false;
       this.data.stickers[id] = Date.now(); this.save(); queueAward({ sticker: id }); checkMeta(); return true;
     },
-    reset: function () { this.data.leaves = 0; this.data.stickers = {}; this.data.done = {}; this.save(); }
+    reset: function () { var all = EC.db.progressAll(); all[EC.auth.pid()] = EC.db.newProgress(); this.save(); }
   };
+  EC.pulsePill = function () { var pill = $('#userpill'); if (!pill) return; pill.classList.remove('pulse'); void pill.offsetWidth; pill.classList.add('pulse'); };
   EC.missionCount = function () {
     var ids = EC.MISSIONS.map(function (m) { return m.id; });
     return Object.keys(P.data.done).filter(function (k) { return ids.indexOf(k) >= 0 || k.indexOf('nha-') === 0; }).length;
@@ -194,15 +198,16 @@
     if (n >= 3) P.award('chien-binh');
     if (n >= 6) P.award('sieu-anh-hung');
   }
-  /* Thưởng một lần cho một việc; chơi lại vẫn được lá nếu repeatLeaves > 0 */
+  /* Thưởng một lần cho một việc (các hoạt động cũ: trang màu, thử thách xanh, tô màu...).
+     Mỗi "lá" của bản trước được đổi thành 5 XP. */
+  EC.LEAF_XP = 5;
   EC.reward = function (opt) {
     var first = opt.once ? P.mark(opt.once) : true;
-    var n = first ? opt.leaves : (opt.repeatLeaves || 0);
+    var n = (first ? opt.leaves : (opt.repeatLeaves || 0)) * EC.LEAF_XP;
     if (n > 0) P.add(n, opt.why);
     if (opt.sticker) P.award(opt.sticker);
     return first;
   };
-  document.addEventListener('ec:progress', function () { $('#leaf-count').textContent = P.data.leaves; });
 
   /* ---------- Hộp thoại ---------- */
   var lastFocus = null, modalClose = null;
@@ -235,23 +240,47 @@
     setTimeout(function () { box.innerHTML = ''; }, 3600);
   };
 
+  /* Hàng đợi chúc mừng: nhãn dán, cây lớn, huy hiệu vùng đất, lên cấp, vật phẩm mới, danh hiệu cuối cùng */
   var awardQ = [], showing = false;
-  function queueAward(x) { awardQ.push(x); if (!showing) nextAward(); }
+  function queueAward(x) { awardQ.push(x); if (!showing) setTimeout(nextAward, 350); showing = true; }
+  EC.queueAward = queueAward;
+  function okBtn(label, href) {
+    return '<div class="row">' + (href ? '<a class="btn btn-ghost" href="' + href + '" data-close>Xem hộ chiếu</a>' : '') + '<button class="btn" type="button" data-close>' + label + '</button></div>';
+  }
   function nextAward() {
     var x = awardQ.shift(); if (!x) { showing = false; return; }
     showing = true; S.play('win'); EC.confetti();
-    var html;
+    var html = '', say = '';
     if (x.sticker) {
       var s = EC.STICKERS.filter(function (k) { return k.id === x.sticker; })[0];
-      html = '<div class="disc">' + A.thing(s.icon) + '</div><h2 id="modal-title">Huy hiệu mới!</h2><p class="award-name">' + esc(s.name) + '</p>' +
-        '<div class="row"><button class="btn" type="button" data-close>Tuyệt quá!</button></div>';
-      V.autoSay('Bé nhận được huy hiệu ' + s.name);
-    } else {
+      html = '<div class="disc">' + A.thing(s.icon) + '</div><h2 id="modal-title">Nhãn dán mới!</h2><p class="award-name">' + esc(s.name) + '</p>' + okBtn('Tuyệt quá!');
+      say = 'Bé nhận được nhãn dán ' + s.name;
+    } else if (x.tree != null) {
       var t = EC.TREE[x.tree];
-      html = '<div style="max-width:220px;margin:0 auto">' + A.tree(x.tree) + '</div><h2 id="modal-title">Cây lớn rồi!</h2><p class="award-name">' + esc(t.name) + '</p>' +
-        '<div class="row"><button class="btn" type="button" data-close>Chơi tiếp</button></div>';
-      V.autoSay('Cây của bé đã thành ' + t.name);
+      html = '<div style="max-width:220px;margin:0 auto">' + A.tree(x.tree) + '</div><h2 id="modal-title">Cây lớn rồi!</h2><p class="award-name">' + esc(t.name) + '</p>' + okBtn('Chơi tiếp');
+      say = 'Cây của bé đã thành ' + t.name;
+    } else if (x.badge) {
+      var z = EC.zoneById(x.badge);
+      if (!z) { nextAward(); return; }
+      html = '<div class="award-medal">' + A.medal(z.badge.icon, 'var(--t-' + z.color + ')', true) + '</div><h2 id="modal-title">Huy hiệu mới!</h2><p class="award-name">' + esc(z.badge.name) + '</p>' +
+        '<p class="small muted">Bé đã hoàn thành ' + esc(z.name) + '.</p>' + okBtn('Tuyệt quá!', '#ho-chieu');
+      say = 'Chúc mừng! Bé nhận huy hiệu ' + z.badge.name;
+    } else if (x.level != null) {
+      var L = EC.content().levels[x.level] || { name: '' };
+      html = '<div class="award-level"><span class="lv-num">' + (x.level + 1) + '</span></div><h2 id="modal-title">Lên cấp ' + (x.level + 1) + '!</h2><p class="award-name">' + esc(L.name) + '</p>' + okBtn('Hoan hô!');
+      say = 'Bé đã lên cấp ' + (x.level + 1) + ': ' + L.name;
+    } else if (x.items) {
+      var C = EC.content().rewards;
+      var list = x.items.map(function (id) { return C.filter(function (r) { return r.id === id; })[0]; }).filter(Boolean);
+      html = '<h2 id="modal-title">Mở khóa vật phẩm!</h2><div class="award-items">' + list.map(function (r) { return '<div>' + EC.rewardArt(r) + '<b>' + esc(r.name) + '</b></div>'; }).join('') + '</div>' +
+        '<p class="small muted">Xem trong Bộ sưu tập nhé.</p><div class="row"><a class="btn btn-ghost" href="#bo-suu-tap" data-close>Bộ sưu tập</a><button class="btn" type="button" data-close>Tuyệt quá!</button></div>';
+      say = 'Bé mở khóa ' + list.length + ' vật phẩm mới';
+    } else if (x.title) {
+      html = '<div class="award-medal">' + A.medal('i-passport', '#FFFDF7', true) + '</div><p class="eyebrow">Danh hiệu cuối cùng</p><h2 id="modal-title">NHÀ KHÁM PHÁ ECOCRAYON</h2>' +
+        '<p>Bé đã hoàn thành cả 4 vùng đất!</p><div class="row"><a class="btn c-nghe" href="#ho-chieu" data-close>Xem chứng nhận</a></div>';
+      say = 'Chúc mừng Nhà khám phá ECOCRAYON!';
     }
+    if (say) V.autoSay(say);
     EC.modal(html, function () { setTimeout(nextAward, 250); });
   }
 
@@ -282,40 +311,59 @@
   }
 
   /* ---------- Điều hướng ---------- */
+  /* Trang thường: EC.route('ten-trang', fn, tieuDe).
+     Trang có tham số: EC.route('vung/', fn, tieuDe) → địa chỉ #vung/sac-mau gọi fn(view, ten, 'sac-mau'). */
   var ROUTES = {}, leaveFns = [];
   EC.route = function (name, fn, title) { ROUTES[name] = { fn: fn, title: title }; };
   EC.onLeave = function (fn) { leaveFns.push(fn); };
   var NAVGROUP = function (r) {
-    if (r === 'vuon-mau' || r.indexOf('mau-') === 0) return 'mau';
-    if (['tro-choi', 'ghep-cap', 'phan-loai', 'do-vui', 'pha-mau'].indexOf(r) >= 0) return 'choi';
-    if (r === 'to-mau') return 'to';
-    if (r === 'thu-thach' || r === 'tai-che') return 'thuthach';
-    if (r === 'so-cua-be') return 'so';
-    if (['phu-huynh', 've-ecocrayon', 'ma-qr'].indexOf(r) >= 0) return 'lon';
+    var head = r.split('/')[0];
+    if (r === 'trang-chu') return 'home';
+    if (r === 've-ecocrayon') return 'gioithieu';
+    if (['kham-pha', 'vung', 'bai-hoc', 'choi', 'tro-choi', 'ghep-cap', 'phan-loai', 'do-vui', 'pha-mau', 'to-mau', 'thu-thach', 'tai-che', 'vuon-mau'].indexOf(head) >= 0 || r.indexOf('mau-') === 0) return 'khampha';
+    if (r === 'huong-dan' || r === 'phu-huynh') return 'huongdan';
+    if (['ho-chieu', 'so-cua-be', 'bo-suu-tap'].indexOf(r) >= 0) return 'hochieu';
+    if (['dang-nhap', 'dang-ky', 'ho-so'].indexOf(r) >= 0) return 'taikhoan';
     return '';
   };
+  var TABGROUP = function (r) {
+    var g = NAVGROUP(r), head = r.split('/')[0];
+    if (['choi', 'tro-choi', 'ghep-cap', 'phan-loai', 'do-vui', 'pha-mau', 'to-mau'].indexOf(head) >= 0) return 'choi';
+    return g;
+  };
+  function resolve(name) {
+    if (ROUTES[name]) return { r: ROUTES[name], arg: null };
+    var k = name.indexOf('/');
+    if (k > 0 && ROUTES[name.slice(0, k + 1)]) return { r: ROUTES[name.slice(0, k + 1)], arg: name.slice(k + 1) };
+    return null;
+  }
   function render() {
     var name = '';
     try { name = decodeURIComponent(location.hash.slice(1)); } catch (e) { name = location.hash.slice(1); }
-    if (!ROUTES[name]) {
+    var hit = resolve(name);
+    if (!hit) {
       var code = EC.normCode(name);
       if (EC.CODES[code]) { location.replace('#' + EC.CODES[code]); return; }
-      name = 'trang-chu';
+      name = 'trang-chu'; hit = resolve(name);
     }
-    var r = ROUTES[name];
+    var r = hit.r;
     leaveFns.splice(0).forEach(function (f) { try { f(); } catch (e) { /* bỏ qua */ } });
+    $$('.drag-ghost').forEach(function (g) { g.remove(); });
     V.stop(); EC.closeModal();
     var view = $('#view'); view.innerHTML = '';
-    r.fn(view, name);
-    var t = typeof r.title === 'function' ? r.title(name) : r.title;
-    document.title = t ? t + ' · ECOCRAYON' : 'ECOCRAYON – Bộ màu sáp thiên nhiên';
+    view.classList.remove('enter'); void view.offsetWidth; view.classList.add('enter');
+    r.fn(view, name, hit.arg);
+    var t = typeof r.title === 'function' ? r.title(name, hit.arg) : r.title;
+    document.title = t ? t + ' · ECOCRAYON' : 'ECOCRAYON – Thế giới khám phá sắc màu thiên nhiên';
     window.scrollTo(0, 0);
-    var grp = NAVGROUP(name);
-    $$('[data-nav]').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-nav') === grp); });
+    var grp = NAVGROUP(name), tgrp = TABGROUP(name);
+    $$('.mainnav [data-nav]').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-nav') === grp); });
+    $$('.tabbar [data-nav]').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-nav') === tgrp); });
     $$('.drawer-panel a').forEach(function (a) { a.classList.toggle('on', a.getAttribute('href') === '#' + name); });
     closeDrawer();
     try { view.focus({ preventScroll: true }); } catch (e) { /* bỏ qua */ }
   }
+  EC.rerender = render;
   EC.go = function (name) { if (location.hash === '#' + name) render(); else location.hash = '#' + name; };
   function closeDrawer() { var d = $('#drawer'); if (!d.hidden) { d.hidden = true; $('#btn-menu').setAttribute('aria-expanded', 'false'); } }
 
@@ -330,48 +378,82 @@
   function adultBox(inner) { return '<details class="adult"><summary>Góc người lớn</summary><div class="stack" style="gap:8px">' + inner + '</div></details>'; }
 
   /* ================= TRANG CHỦ ================= */
+  /* Mã QR (SVG) cho một địa chỉ; dùng chung cho trang chủ, trang giới thiệu và trang in thẻ */
+  EC.siteBase = function () { return location.href.split('#')[0].split('?')[0]; };
+  EC.qrSVG = function (url) {
+    try { var q = window.qrcode(0, 'M'); q.addData(url); q.make(); return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); }
+    catch (e) { return '<p class="small">Không tạo được mã</p>'; }
+  };
+  EC.worldQR = function () {
+    var url = EC.siteBase() + '?qr=KHAMPHA#kham-pha';
+    return '<div class="qr-box" title="' + esc(url) + '">' + EC.qrSVG(url) + '</div>' +
+      (location.protocol === 'file:' ? '<p class="note note-safe small">Trang đang mở từ máy tính nên mã này chỉ chạy trên máy này. Đăng trang lên mạng để có mã dùng thật.</p>' : '');
+  };
+  EC.productBlock = function () {
+    var PR = EC.PRODUCT;
+    return '<div class="product sheet">' +
+        '<div class="product-art">' + A.heroBox() + '</div>' +
+        '<div class="stack product-copy"><p class="eyebrow">Sản phẩm</p><h2 class="h2">' + esc(PR.name) + '</h2><p class="lead">' + esc(PR.intro) + '</p>' +
+          '<h3 class="h3">Thành phần và nguyên liệu</h3>' +
+          '<div class="ingr">' + EC.COLORS.map(function (c) {
+            return '<a class="ingr-item ' + colorClass(c.id) + '" href="#mau-' + c.id + '">' + A.ingredient(c.id) + '<span><b>' + esc(c.name) + '</b><small>' + esc(c.color) + ' · ' + esc(c.pigment) + '</small></span></a>';
+          }).join('') + '</div>' +
+          '<p class="small muted">' + esc(PR.base) + '</p>' +
+        '</div></div>' +
+      '<div class="grid product-more" style="--min:240px">' +
+        '<div class="sheet"><h3 class="h3">Đặc điểm sản phẩm</h3><ul class="ticks">' + PR.features.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' +
+        '<div class="sheet"><h3 class="h3">Thân thiện với môi trường</h3><ul class="ticks">' + PR.eco.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' +
+        '<div class="sheet"><h3 class="h3">Hướng dẫn sử dụng</h3><ol class="steps">' + PR.usage.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol></div>' +
+        '<div class="sheet qr-world"><h3 class="h3">Quét mã vào thế giới khám phá</h3>' + EC.worldQR() +
+          '<form class="codebox" data-code autocomplete="off"><label>Hoặc nhập mã trên thẻ</label><div class="codebox-row"><input placeholder="VD: KHAMPHA" maxlength="12" spellcheck="false" aria-label="Mã trên thẻ"><button class="btn btn-sm" type="submit">Mở</button></div><p class="codebox-msg" aria-live="polite"></p></form>' +
+        '</div>' +
+      '</div>';
+  };
+  var EDU = [
+    ['leaf', 'Khám phá thiên nhiên', 'Màu sắc đến từ rau củ, hoa lá; cây lớn lên thế nào.', 'la-dua'],
+    ['b-bowl', 'Nhận biết và sáng tạo màu sắc', 'Màu cơ bản, màu nóng – lạnh, pha màu và vẽ tranh.', 'bap-cai'],
+    ['b-recycle', 'Hiểu về tái chế', 'Phân loại rác, dùng lại đồ cũ, giảm rác thải.', 'ca-rot'],
+    ['earth', 'Ý thức bảo vệ môi trường', 'Tiết kiệm nước, điện, giữ biển sạch và trồng cây.', 'dau-biec']
+  ];
+  function journeyStrip() {
+    var prof = EC.auth.profile(), T = EC.totals(), lv = EC.levelOf(P.data.xp);
+    if (!EC.auth.isGuest()) {
+      return '<div class="journey sheet">' + EC.avatarHTML(prof, 64) +
+        '<div class="stack journey-txt"><b class="h3">Chào ' + esc(prof.displayName) + '!</b><span class="muted">Cấp ' + (lv.idx + 1) + ' · ' + esc(lv.name) + ' · ' + T.stars + ' sao · ' + T.badges + '/' + T.zones + ' huy hiệu</span></div>' +
+        '<div class="row"><a class="btn" href="#kham-pha">Tiếp tục hành trình</a><a class="btn btn-ghost" href="#ho-chieu">Hộ chiếu</a></div></div>';
+    }
+    return '<div class="journey sheet">' + EC.avatarHTML(prof, 64) +
+      '<div class="stack journey-txt"><b class="h3">Bé đã có hồ sơ chưa?</b><span class="muted">Tạo hồ sơ để lưu sao, huy hiệu và hộ chiếu khám phá. Bé cũng có thể chơi thử ngay.' + (T.stars ? ' Bé đang có ' + T.stars + ' sao.' : '') + '</span></div>' +
+      '<div class="row"><a class="btn" href="#dang-ky">Tạo hồ sơ</a><a class="btn btn-ghost" href="#dang-nhap">Đăng nhập</a></div></div>';
+  }
   EC.route('trang-chu', function (view) {
-    var chips = EC.COLORS.map(function (c) { return '<a href="#mau-' + c.id + '" class="' + colorClass(c.id) + '"><span class="chip">' + esc(c.name) + '</span></a>'; }).join('');
-    var stage = P.stage(), next = EC.TREE[stage + 1];
-    var pct = next ? Math.round((P.data.leaves - EC.TREE[stage].at) / (next.at - EC.TREE[stage].at) * 100) : 100;
+    var cast = ['mam', 'eco', 'besap', 'robo', 'earth'].map(function (c, i) { return '<span class="cast-' + i + '">' + A.character(c, i === 2 ? 'wow' : 'happy') + '</span>'; }).join('');
     view.innerHTML =
-      '<section class="hero"><div class="wrap hero-grid">' +
+      '<section class="hero hero-world"><div class="wrap hero-grid">' +
         '<div class="hero-copy">' +
-          '<h1 class="h1"><span>Tô màu thiên nhiên,</span><span class="w2">khơi nguồn tri thức xanh</span></h1>' +
-          EC.mascotLine('Chào bé! Chạm vào một cây sáp nhé!', 'happy', 'home-m') +
-          '<div class="row"><a class="btn btn-big" href="#vuon-mau">Khám phá màu</a><a class="btn btn-big btn-ghost" href="#tro-choi">Chơi ngay</a></div>' +
+          '<p class="eyebrow">Bộ màu sáp thiên nhiên · Học mà chơi</p>' +
+          '<h1 class="h1"><span>Chào mừng đến với</span><span class="w2">thế giới ECOCRAYON!</span></h1>' +
+          '<p class="lead">Cùng khám phá những vùng đất kỳ diệu, tìm hiểu sắc màu thiên nhiên và trở thành nhà khám phá nhí!</p>' +
+          '<div class="row"><a class="btn btn-big" href="#kham-pha">Bắt đầu khám phá</a><a class="btn btn-big btn-ghost" href="#ve-ecocrayon">Tìm hiểu ECOCRAYON</a></div>' +
         '</div>' +
-        '<div class="hero-art">' + A.heroBox() + '<div class="hero-chips">' + chips + '</div></div>' +
+        '<div class="hero-art"><div class="cast" aria-hidden="true">' + cast + '</div></div>' +
       '</div></section>' +
+      '<section class="section-tight"><div class="wrap">' + journeyStrip() + '</div></section>' +
       '<section class="section-tight"><div class="wrap">' +
-        '<h2 class="h2" style="margin-bottom:18px"><span class="title-scribble" style="--sc:var(--c-den)">Bé muốn làm gì?</span></h2>' +
-        '<div class="acts">' +
-          act('#vuon-mau', 'c-den', A.ingredient('den') + A.ingredient('nghe'), 'Khám phá màu') +
-          act('#tro-choi', 'c-dau-biec', A.thing('b-cards') + A.bin(EC.BINS[3]), 'Trò chơi') +
-          act('#to-mau', 'c-nghe', A.crayon(EC.COLORS[1].hex) + A.crayon(EC.COLORS[0].hex) + A.thing('k-book'), 'Tô màu') +
-          act('#thu-thach', 'c-la-dua', A.thing('b-leaf') + A.thing('b-recycle'), 'Thử thách xanh') +
-        '</div>' +
+        EC.head({ title: '4 vùng đất khám phá', lead: 'Vùng nào cũng mở sẵn. Bé thích chủ đề nào thì chọn vùng đó!', sc: '--c-den', side: '<a class="btn btn-sm btn-ghost" href="#kham-pha">Xem bản đồ</a>' }) +
+        '<div class="zonecards">' + EC.zones().map(EC.zoneCard).join('') + '</div>' +
       '</div></section>' +
-      '<section class="section"><div class="wrap home-duo">' +
-        '<a class="sheet treecard" href="#so-cua-be">' + A.tree(stage) +
-          '<div class="stack" style="gap:10px"><h2 class="h3">Cây của bé</h2><p class="big-stat">' + esc(EC.TREE[stage].name) + ' · ' + P.data.leaves + ' lá</p>' +
-          '<div class="meter" role="img" aria-label="Tiến độ"><span style="width:' + pct + '%"></span></div></div>' +
-        '</a>' +
-        '<form class="sheet codebox" id="home-code" autocomplete="off">' +
-          '<h2 class="h3"><label for="home-code-in">Nhập mã trên thẻ màu</label></h2>' +
-          '<div class="codebox-row"><input id="home-code-in" placeholder="VD: NGHE" maxlength="12" spellcheck="false"><button class="btn" type="submit">Mở</button></div>' +
-          '<p class="codebox-msg" aria-live="polite"></p>' +
-        '</form>' +
+      '<section class="section"><div class="wrap stack" style="gap:20px">' + EC.productBlock() + '</div></section>' +
+      '<section class="section-tight"><div class="wrap">' +
+        EC.head({ title: 'Bé học được gì?', sc: '--c-la-dua' }) +
+        '<div class="edu">' + EDU.map(function (e) { return '<div class="edu-card c-' + e[3] + '">' + A.thing(e[0]) + '<h3>' + e[1] + '</h3><p>' + e[2] + '</p></div>'; }).join('') + '</div>' +
       '</div></section>' +
       '<section class="section-tight"><div class="wrap"><nav class="grownups" aria-label="Dành cho người lớn"><span>Dành cho người lớn:</span>' +
-        '<a href="#phu-huynh">Phụ huynh &amp; giáo viên</a><a href="#ve-ecocrayon">Về ECOCRAYON</a><a href="#tai-che">Góc tái chế</a>' +
+        '<a href="#huong-dan">Hướng dẫn</a><a href="#phu-huynh">Phụ huynh &amp; giáo viên</a><a href="#ve-ecocrayon">Về ECOCRAYON</a><a href="#tai-che">Góc tái chế</a>' +
       '</nav></div></section>';
-    bindCodeForm($('#home-code'));
+    $$('form[data-code]', view).forEach(bindCodeForm);
     $$('.hero-crayon', view).forEach(function (a) { a.addEventListener('mouseenter', function () { S.play('pop'); }); });
   }, '');
-  function act(href, cls, art, title) {
-    return '<a class="act ' + cls + '" href="' + href + '"><div class="act-art">' + art + '</div><h3>' + title + '</h3></a>';
-  }
 
   /* ================= VƯỜN MÀU ================= */
   EC.route('vuon-mau', function (view) {
@@ -581,13 +663,13 @@
   EC.route('thu-thach', function (view) {
     function missionCard(m) {
       var d = P.isDone(m.id);
-      return '<div class="mission' + (d ? ' done' : '') + '"><span class="chip leafchip">+' + m.leaves + ' lá</span><h3>' + esc(m.title) + '</h3><p>' + esc(m.how) + '</p>' +
+      return '<div class="mission' + (d ? ' done' : '') + '"><span class="chip leafchip">+' + m.leaves * EC.LEAF_XP + ' XP</span><h3>' + esc(m.title) + '</h3><p>' + esc(m.how) + '</p>' +
         (d ? '<span class="stamp">Đã xong ✓</span>' : '<button class="btn btn-sm c-la-dua" type="button" data-m="' + m.id + '">Xong rồi!</button>') + '</div>';
     }
     function diyCard(x) {
       var d = P.isDone(x.id);
       return '<details class="diy' + (d ? ' done' : '') + '"><summary>' + A.thing(DIY_ICON[x.id]) +
-        '<h3>' + esc(x.title) + '</h3><span class="chip">' + (d ? 'Đã làm ✓' : '+' + x.leaves + ' lá') + '</span></summary>' +
+        '<h3>' + esc(x.title) + '</h3><span class="chip">' + (d ? 'Đã làm ✓' : '+' + x.leaves * EC.LEAF_XP + ' XP') + '</span></summary>' +
         '<div class="diy-body"><div><b>Cần có</b><ul>' + x.need.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul><p class="note note-safe small" style="margin-top:10px">' + esc(x.safe) + '</p></div>' +
         '<div><b>Cách làm</b><ol>' + x.steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>' +
         (d ? '' : '<button class="btn btn-sm c-ca-rot" type="button" data-diy="' + x.id + '" style="margin-top:12px">Làm xong rồi!</button>') + '</div></div></details>';
@@ -617,62 +699,32 @@
     paint();
   }, 'Thử thách xanh');
 
-  /* ================= SỔ CỦA BÉ ================= */
-  EC.route('so-cua-be', function (view) {
-    function paint() {
-      var st = P.stage(), next = EC.TREE[st + 1], got = Object.keys(P.data.stickers).length;
-      var pct = next ? Math.round((P.data.leaves - EC.TREE[st].at) / (next.at - EC.TREE[st].at) * 100) : 100;
-      view.innerHTML = '<section class="section"><div class="wrap">' +
-        EC.head({ title: P.data.name ? 'Sổ của ' + esc(P.data.name) : 'Sổ của bé', sc: '--c-la-dua' }) +
-        '<div class="book">' +
-          '<div class="sheet stack tree-wrap">' + A.tree(st) +
-            '<p class="big-stat">' + esc(EC.TREE[st].name) + ' · ' + P.data.leaves + ' lá</p>' +
-            '<div class="meter"><span style="width:' + pct + '%"></span></div>' +
-            (next ? '<p class="muted">Còn ' + (next.at - P.data.leaves) + ' lá nữa</p>' : '') +
-            '<form class="namebox" id="namebox"><label class="sr" for="kid-name">Tên của bé</label><input id="kid-name" maxlength="30" placeholder="Tên của bé" value="' + esc(P.data.name) + '"><button class="btn btn-sm" type="submit">Lưu</button></form>' +
-            '<button class="btn c-nghe" type="button" id="cert"' + (P.data.leaves >= EC.CERT_AT ? '' : ' disabled') + '>In giấy khen</button>' +
-            (P.data.leaves >= EC.CERT_AT ? '' : '<p class="small muted">Đủ ' + EC.CERT_AT + ' lá để in</p>') +
-            '<div id="reset-box"><button class="btn btn-ghost btn-sm" type="button" id="reset">Bắt đầu lại</button></div>' +
-          '</div>' +
-          '<div class="sheet"><div class="sec-head" style="margin-bottom:14px"><h2 class="h3">Huy hiệu</h2><span class="score">' + got + ' / ' + EC.STICKERS.length + '</span></div><div class="stickers">' +
-            EC.STICKERS.map(function (s) { var has = P.has(s.id); return '<div class="sticker' + (has ? ' got' : '') + '" title="' + esc(s.how) + '"><div class="disc">' + A.thing(s.icon) + '</div><b>' + esc(s.name) + '</b></div>'; }).join('') +
-          '</div></div>' +
-        '</div></div></section>';
-      $('#namebox').addEventListener('submit', function (e) { e.preventDefault(); P.data.name = $('#kid-name').value.trim().slice(0, 30); P.save(); EC.toast('Đã lưu tên'); paint(); });
-      $('#cert').addEventListener('click', printCert);
-      $('#reset').addEventListener('click', function () {
-        $('#reset-box').innerHTML = '<p><b>Xóa hết lá và huy hiệu?</b></p><div class="row"><button class="btn btn-sm c-den" type="button" id="reset-yes">Xóa</button><button class="btn btn-sm btn-ghost" type="button" id="reset-no">Không</button></div>';
-        $('#reset-yes').addEventListener('click', function () { P.reset(); P.data.name = ''; P.save(); EC.toast('Đã bắt đầu lại'); paint(); });
-        $('#reset-no').addEventListener('click', paint);
-      });
-    }
-    paint();
-  }, 'Sổ của bé');
+  /* ================= SỔ CỦA BÉ → nay là Hộ chiếu khám phá ================= */
+  EC.route('so-cua-be', function () { location.replace('#ho-chieu'); }, 'Hộ chiếu');
 
-  function printCert() {
-    var d = new Date(), date = d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear();
-    EC.printHTML('<div class="cert"><p class="eyebrow">ECOCRAYON · Tô màu thiên nhiên – Khơi nguồn tri thức xanh</p><h1>Giấy khen</h1><p style="margin-top:8px">Chúc mừng bạn nhỏ</p>' +
-      '<div class="name">' + esc(P.data.name || '............................') + '</div>' +
-      '<p>đã trở thành <b>Nhà thám hiểm xanh</b>: khám phá màu từ thiên nhiên, phân loại rác và làm những việc nhỏ giúp Trái Đất.</p>' +
-      A.tree(P.stage()) + '<p>' + P.data.leaves + ' lá · ' + Object.keys(P.data.stickers).length + ' huy hiệu · ngày ' + date + '</p>' +
-      '<div class="sign"><div>Phụ huynh / Giáo viên<br><br><br>.....................</div><div>Bé Sáp<br><br><br>(ký bằng bút sáp)</div></div></div>');
-  }
-
-  /* ================= TRÒ CHƠI ================= */
+  /* ================= TRÒ CHƠI (tổng hợp) ================= */
   EC.route('tro-choi', function (view) {
-    function card(href, cls, art, title, text) {
-      return '<a class="gamecard ' + cls + '" href="' + href + '"><div class="gc-art">' + art + '</div><div style="min-width:0"><h3>' + title + '</h3><p>' + text + '</p></div></a>';
+    function card(href, cls, art, title, text, extra) {
+      return '<a class="gamecard ' + cls + '" href="' + href + '"><div class="gc-art">' + art + '</div><div style="min-width:0"><h3>' + title + '</h3><p>' + text + '</p>' + (extra || '') + '</div></a>';
     }
-    view.innerHTML = '<section class="section"><div class="wrap">' +
-      EC.head({ title: 'Trò chơi', sc: '--c-dau-biec' }) +
-      '<div class="gamecards">' +
+    var prog = P.data;
+    var zones = EC.zones().map(function (z) {
+      var list = EC.gamesOf(z).concat(z.challenge ? [z.challenge] : []);
+      return '<div class="stack" style="gap:12px"><h2 class="h3 zone-title c-' + z.color + '"><span class="dot"></span>' + esc(z.name) + '</h2><div class="gamecards">' +
+        list.map(function (g) { var r = prog.games[g.id]; return card('#choi/' + g.id, 'c-' + z.color, EC.pic(g.icon || (g === z.challenge ? z.badge.icon : 'b-quiz')), esc(g.title), esc(g.desc), EC.starsHTML(r ? r.stars : 0)); }).join('') +
+        '</div></div>';
+    }).join('');
+    view.innerHTML = '<section class="section"><div class="wrap stack" style="gap:28px">' +
+      EC.head({ title: 'Trò chơi', lead: '12 trò chơi và 4 thử thách của 4 vùng đất. Chơi lại bao nhiêu lần cũng được để đạt 3 sao!', sc: '--c-dau-biec', side: '<a class="btn btn-sm btn-ghost" href="#kham-pha">Bản đồ</a>' }) +
+      zones +
+      '<div class="stack" style="gap:12px"><h2 class="h3">Trò chơi thêm</h2><div class="gamecards">' +
         card('#ghep-cap', 'c-nghe', A.thing('b-cards'), 'Ghép cặp màu', 'Lật thẻ, tìm cặp cùng màu.') +
         card('#phan-loai', 'c-la-dua', A.bin(EC.BINS[0]), 'Phân loại rác', 'Đưa rác về đúng thùng.') +
         card('#do-vui', 'c-dau-biec', A.thing('b-quiz'), 'Đố vui xanh', '8 câu hỏi vui.') +
-        card('#pha-mau', 'c-ca-rot', A.thing('b-bowl'), 'Bếp pha màu', 'Trộn 2 màu ra màu mới.') +
+        card('#pha-mau', 'c-ca-rot', A.thing('b-bowl'), 'Bếp pha màu', 'Trộn 2 màu sáp ra màu mới.') +
         card('#mau-bap-cai', 'c-bap-cai', A.thing('b-beaker'), 'Thí nghiệm', 'Nước tím đổi màu!') +
-        card('#to-mau', 'c-den', A.thing('b-crayon'), 'Tô màu', 'Tô tranh, kể chuyện.') +
-      '</div></div></section>';
+        card('#to-mau', 'c-den', A.thing('b-crayon'), 'Tô màu tự do', 'Tô tranh, kể chuyện.') +
+      '</div></div></div></section>';
   }, 'Trò chơi');
 
   /* ================= PHỤ HUYNH & GIÁO VIÊN ================= */
@@ -806,7 +858,7 @@
 
   /* ================= THẺ MÃ QR (cho nhóm in) ================= */
   EC.route('ma-qr', function (view) {
-    var here = location.href.split('#')[0];
+    var here = EC.siteBase();
     var base = store.get('qrbase', '') || here;
     var isFile = location.protocol === 'file:';
     view.innerHTML = '<section class="section"><div class="wrap stack" style="gap:20px">' +
@@ -818,13 +870,14 @@
       '<div class="sheet-flat prose"><h2 class="h3">Trước khi đóng gói</h2><ul><li>Quét thử mỗi thẻ bằng 2 điện thoại (Android, iPhone).</li><li>Mã QR rộng ít nhất 2 cm, mực đậm trên nền trắng.</li><li>Dùng một địa chỉ cố định, không đổi sau khi in.</li></ul></div>' +
       '</div></section>';
     function cardsHTML(b) {
-      b = b.replace(/#.*$/, '');
-      var list = EC.COLORS.map(function (c) { return { cls: c.id, title: c.color, sub: c.name, art: A.ingredient(c.id), code: c.code, route: 'mau-' + c.id, text: 'Quét để gặp ' + c.name + '.' }; });
+      b = b.replace(/#.*$/, '').replace(/\?.*$/, '');
+      var list = [{ cls: 'dau-biec', title: 'Thế giới khám phá', sub: '4 vùng đất, 12 trò chơi', art: A.thing('i-map'), code: 'KHAMPHA', route: 'kham-pha', text: 'Quét để vào bản đồ 4 vùng đất.' }];
+      EC.zones().forEach(function (z) { var code = EC.zoneCode(z.id); if (code) list.push({ cls: z.color, title: z.name, sub: z.charName, art: A.character(z.char, 'happy', '', true), code: code, route: 'vung/' + z.id, text: 'Quét để vào ' + z.name + '.' }); });
+      list = list.concat(EC.COLORS.map(function (c) { return { cls: c.id, title: c.color, sub: c.name, art: A.ingredient(c.id), code: c.code, route: 'mau-' + c.id, text: 'Quét để gặp ' + c.name + '.' }; }));
       list.push({ cls: 'la-dua', title: 'Tái chế', sub: 'Phân loại rác', art: A.thing('b-recycle'), code: 'TAICHE', route: 'tai-che', text: 'Quét để học phân loại rác.' });
       list.push({ cls: 'nghe', title: 'Tô màu', sub: 'Sổ tô màu điện tử', art: A.thing('b-crayon'), code: 'TOMAU', route: 'to-mau', text: 'Quét để tô tranh.' });
       return list.map(function (x) {
-        var url = b + '#' + x.route, svgQR = '';
-        try { var q = window.qrcode(0, 'M'); q.addData(url); q.make(); svgQR = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch (e) { svgQR = '<p class="small">Không tạo được mã</p>'; }
+        var url = b + '?qr=' + x.code + '#' + x.route, svgQR = EC.qrSVG(url);
         return '<div class="qrcard" style="--cc:var(--c-' + x.cls + ');--cc-on:var(--on-' + x.cls + ')"><div class="qtop">' + x.art + '<div><b>' + esc(x.title) + '</b><span>' + esc(x.sub) + '</span></div></div>' +
           '<div class="qbody"><div class="stack" style="gap:6px"><p>' + esc(x.text) + '</p><p>Hoặc nhập mã:</p><span class="qcode">' + x.code + '</span></div><div class="qimg">' + svgQR + '</div></div>' +
           '<p class="qurl">' + esc(url) + '</p></div>';
@@ -840,7 +893,8 @@
   /* ================= VỀ ECOCRAYON ================= */
   EC.route('ve-ecocrayon', function (view) {
     view.innerHTML = '<section class="section"><div class="wrap stack" style="gap:34px">' +
-      EC.head({ title: 'Về ECOCRAYON', lead: 'Bút sáp lấy màu từ rau củ, hộp làm từ giấy tái chế, kèm sổ tô màu và mã QR dẫn tới trang học.', sc: '--c-nghe' }) +
+      EC.head({ title: 'Giới thiệu ECOCRAYON', lead: 'Bút sáp lấy màu từ rau củ, hộp làm từ giấy tái chế, kèm sổ tô màu và mã QR dẫn vào thế giới khám phá.', sc: '--c-nghe', side: '<a class="btn btn-sm" href="#kham-pha">Vào thế giới khám phá</a>' }) +
+      '<div class="stack" style="gap:20px">' + EC.productBlock() + '</div>' +
       '<div><h2 class="h3" style="margin-bottom:12px">Trong hộp có gì</h2><div class="kit">' + EC.KIT.map(function (k) { return '<div class="item">' + A.thing(k.icon) + '<div><b>' + esc(k.name) + '</b><span>' + esc(k.text) + '</span></div></div>'; }).join('') + '</div></div>' +
       '<div><h2 class="h3" style="margin-bottom:12px">Điểm khác biệt</h2><div class="values">' + EC.VALUES.map(function (v) { return '<div class="v c-' + v.c + '"><b>' + esc(v.k) + '</b><p>' + esc(v.t) + '</p></div>'; }).join('') + '</div></div>' +
       '<div><h2 class="h3" style="margin-bottom:12px">Vật liệu tái chế</h2><div class="tablebox"><table class="mattable"><thead><tr><th>Vật liệu</th><th>Cách tận dụng</th><th>Vai trò</th></tr></thead><tbody>' +
@@ -852,15 +906,61 @@
       '<div class="sheet"><h2 class="h3" style="margin-bottom:8px">Bộ theo chủ đề sắp tới</h2><p>Khu vườn rau củ · Động vật quanh em · Đại dương xanh · Bộ cho lớp học. Ba chủ đề đầu đã có tranh mẫu.</p>' +
         '<div class="row" style="margin-top:12px"><a class="btn btn-sm" href="#to-mau">Xem tranh mẫu</a><a class="btn btn-sm btn-ghost" href="#ma-qr">In thẻ mã QR</a></div></div>' +
       '</div></section>';
-  }, 'Về ECOCRAYON');
+    $$('form[data-code]', view).forEach(bindCodeForm);
+  }, 'Giới thiệu ECOCRAYON');
 
   /* ================= KHỞI ĐỘNG ================= */
+  /* Thanh trên, ngăn kéo menu, chân trang: cập nhật theo người chơi và nội dung */
+  function renderChrome() {
+    var prof = EC.auth.profile(), guest = EC.auth.isGuest(), T = EC.totals();
+    var pill = $('#userpill');
+    if (guest) {
+      pill.setAttribute('href', '#dang-nhap');
+      pill.innerHTML = EC.avatarHTML(prof, 34) + '<span class="up-txt">Đăng nhập<small>hoặc Đăng ký</small></span>';
+      pill.setAttribute('aria-label', 'Đăng nhập hoặc đăng ký');
+    } else {
+      pill.setAttribute('href', '#ho-so');
+      pill.innerHTML = EC.avatarHTML(prof, 34) + '<span class="up-txt">' + esc(prof.displayName) + '<small>' + A.star() + T.stars + ' sao</small></span>';
+      pill.setAttribute('aria-label', 'Hồ sơ của ' + prof.displayName + ', ' + T.stars + ' sao');
+    }
+    var da = $('#drawer-account');
+    if (da) da.innerHTML = guest
+      ? '<a href="#dang-nhap">Đăng nhập</a><a href="#dang-ky">Đăng ký hồ sơ mới</a>'
+      : '<a href="#ho-so">Hồ sơ của ' + esc(prof.displayName) + '</a><button type="button" class="drawer-btn" data-logout>Đăng xuất</button>';
+    var tb = $('#tab-account');
+    if (tb) { tb.setAttribute('href', guest ? '#dang-nhap' : '#ho-so'); $('.tb-lbl', tb).textContent = 'Hồ sơ'; $('.tb-ico', tb).innerHTML = EC.avatarHTML(prof, 32); }
+    var c = EC.content().settings.contact, items = [], fc = $('#foot-contact');
+    if (fc) {
+      items.push('<li><b>' + esc(c.org || 'ECOCRAYON') + '</b></li>');
+      if (c.email) items.push('<li>Email: <a href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a></li>');
+      if (c.phone) items.push('<li>Điện thoại: <a href="tel:' + esc(String(c.phone).replace(/[^0-9+]/g, '')) + '">' + esc(c.phone) + '</a></li>');
+      if (c.address) items.push('<li>' + esc(c.address) + '</li>');
+      if (c.facebook && /^https?:\/\//.test(c.facebook)) items.push('<li><a href="' + esc(c.facebook) + '" target="_blank" rel="noopener">Trang mạng xã hội</a></li>');
+      if (!c.email && !c.phone && !c.address) items.push('<li class="muted">Thông tin liên hệ đang được cập nhật.</li>');
+      fc.innerHTML = items.join('');
+    }
+  }
+  EC.renderChrome = renderChrome;
+
   EC.start = function () {
     $('#brand-mark').innerHTML = A.logo();
-    var ico = { mau: A.ingredient('den'), choi: A.thing('b-cards'), to: A.thing('b-crayon'), thuthach: A.thing('b-leaf'), so: A.thing('b-story') };
-    $$('.tb-ico').forEach(function (s) { s.innerHTML = ico[s.getAttribute('data-ico')] || ''; });
-    $('#leaf-count').textContent = P.data.leaves;
+    var ico = { home: A.thing('i-home'), khampha: A.thing('i-map'), choi: A.thing('b-cards'), hochieu: A.thing('i-passport') };
+    $$('.tb-ico[data-ico]').forEach(function (s) { s.innerHTML = ico[s.getAttribute('data-ico')] || ''; });
+    var yr = $('#foot-year'); if (yr) yr.textContent = new Date().getFullYear();
     bindCodeForm($('#foot-code'));
+
+    /* Thống kê: lượt truy cập và lượt vào bằng mã QR (?qr=MÃ) */
+    EC.stats.visit();
+    var qm = location.search.match(/[?&]qr=([^&#]+)/);
+    if (qm) {
+      try { EC.stats.qr(decodeURIComponent(qm[1])); } catch (e) { /* bỏ qua */ }
+      try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* bỏ qua */ }
+    }
+    renderChrome();
+    ['ec:progress', 'ec:auth', 'ec:content'].forEach(function (ev) { document.addEventListener(ev, renderChrome); });
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-logout]')) { EC.auth.logout(); EC.toast('Đã đăng xuất. Hẹn gặp lại!'); closeDrawer(); EC.go('trang-chu'); }
+    });
 
     var sb = $('#btn-sound');
     var soundUi = function () {

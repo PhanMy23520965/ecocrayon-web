@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ECOCRAYON</title>
-<meta name="description" content="ECOCRAYON – bộ màu sáp thiên nhiên. Khám phá màu từ rau củ, chơi trò chơi phân loại rác, tô màu và thực hành sống xanh.">
+<meta name="description" content="ECOCRAYON – bộ màu sáp thiên nhiên và thế giới khám phá cho trẻ: 4 vùng đất, 12 trò chơi về màu sắc, tái chế và bảo vệ môi trường, hộ chiếu nhà khám phá.">
+<meta name="theme-color" content="#DAC39C">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Mali:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/world.css">
 </head>
 <body>
 <a class="skip" href="#view">Bỏ qua menu</a>
@@ -20,17 +22,14 @@
       <span class="brand-name">ECOCRAYON</span>
     </a>
     <nav class="mainnav" aria-label="Điều hướng chính">
-      <a href="#vuon-mau" data-nav="mau">Khám phá màu</a>
-      <a href="#tro-choi" data-nav="choi">Trò chơi</a>
-      <a href="#to-mau" data-nav="to">Tô màu</a>
-      <a href="#thu-thach" data-nav="thuthach">Thử thách xanh</a>
+      <a href="#trang-chu" data-nav="home">Trang chủ</a>
+      <a href="#ve-ecocrayon" data-nav="gioithieu">Giới thiệu</a>
+      <a href="#kham-pha" data-nav="khampha">Khám phá</a>
+      <a href="#huong-dan" data-nav="huongdan">Hướng dẫn</a>
+      <a href="#ho-chieu" data-nav="hochieu">Hộ chiếu của tôi</a>
     </nav>
     <div class="topbar-tools">
-      <a class="leafpill" href="#so-cua-be" id="leafpill" aria-label="Sổ của bé">
-        <span class="leafpill-ico" aria-hidden="true"></span>
-        <span class="leafpill-num" id="leaf-count">0</span>
-        <span class="leafpill-lbl">lá</span>
-      </a>
+      <a class="userpill" href="#dang-nhap" id="userpill">Đăng nhập</a>
       <button class="iconbtn" id="btn-sound" type="button" aria-pressed="true" title="Nhạc và âm thanh"><span class="sr">Nhạc và âm thanh</span></button>
       <button class="iconbtn menubtn" id="btn-menu" type="button" aria-expanded="false" aria-controls="drawer" title="Menu"><span class="sr">Mở menu</span></button>
     </div>
@@ -40,16 +39,26 @@
 <div class="drawer" id="drawer" hidden>
   <div class="drawer-panel" role="dialog" aria-label="Menu">
     <a href="#trang-chu">Trang chủ</a>
-    <a href="#vuon-mau">Khám phá màu</a>
-    <a href="#tro-choi">Trò chơi</a>
-    <a href="#to-mau">Tô màu</a>
-    <a href="#thu-thach">Thử thách xanh</a>
-    <a href="#so-cua-be">Sổ của bé</a>
+    <a href="#ve-ecocrayon">Giới thiệu ECOCRAYON</a>
+    <a href="#kham-pha">Khám phá – bản đồ 4 vùng đất</a>
+    <a href="#vung/sac-mau" class="sub">Vương quốc sắc màu</a>
+    <a href="#vung/phep-thuat" class="sub">Phòng thí nghiệm phép thuật</a>
+    <a href="#vung/tai-che" class="sub">Thành phố tái chế</a>
+    <a href="#vung/hanh-tinh" class="sub">Hành tinh xanh</a>
+    <a href="#huong-dan">Hướng dẫn</a>
+    <a href="#ho-chieu">Hộ chiếu của tôi</a>
+    <a href="#bo-suu-tap">Bộ sưu tập</a>
+    <div class="drawer-account" id="drawer-account"></div>
+    <hr>
+    <a href="#tro-choi">Tất cả trò chơi</a>
+    <a href="#vuon-mau">6 bạn màu sáp</a>
+    <a href="#to-mau">Tô màu tự do</a>
+    <a href="#thu-thach">Thử thách xanh ở nhà</a>
     <a href="#tai-che">Góc tái chế</a>
     <hr>
     <a href="#phu-huynh">Phụ huynh &amp; giáo viên</a>
-    <a href="#ve-ecocrayon">Về ECOCRAYON</a>
-    <a href="#ma-qr">In thẻ mã QR (cho nhóm)</a>
+    <a href="#ma-qr">In thẻ mã QR</a>
+    <a href="#quan-tri">Quản trị</a>
   </div>
 </div>
 
@@ -58,32 +67,50 @@
 <footer class="foot">
   <div class="foot-in">
     <div class="foot-brand">
-      <p class="foot-tag">Tô màu thiên nhiên – Khơi nguồn tri thức xanh</p>
-      <p class="foot-note">Bút sáp để vẽ, không ăn được. Bé dùng cùng người lớn.</p>
+      <p class="foot-tag">ECOCRAYON</p>
+      <p class="foot-note">Tô màu thiên nhiên – Khơi nguồn tri thức xanh. Bộ màu sáp từ rau củ và thế giới khám phá cho bé.</p>
+      <p class="foot-note small">Bút sáp để vẽ, không ăn được. Bé dùng cùng người lớn.</p>
     </div>
+    <div class="foot-col">
+      <h2 class="foot-h">Liên hệ</h2>
+      <ul class="foot-list" id="foot-contact"></ul>
+    </div>
+    <nav class="foot-col" aria-label="Sản phẩm">
+      <h2 class="foot-h">Sản phẩm</h2>
+      <ul class="foot-list">
+        <li><a href="#ve-ecocrayon">Giới thiệu sản phẩm</a></li>
+        <li><a href="#vuon-mau">6 màu sáp thiên nhiên</a></li>
+        <li><a href="#phu-huynh">Phụ huynh &amp; giáo viên</a></li>
+        <li><a href="#ma-qr">In thẻ mã QR</a></li>
+      </ul>
+    </nav>
+    <nav class="foot-col" aria-label="Hỗ trợ">
+      <h2 class="foot-h">Hỗ trợ</h2>
+      <ul class="foot-list">
+        <li><a href="#huong-dan">Hướng dẫn sử dụng</a></li>
+        <li><a href="#bao-mat">Chính sách bảo mật</a></li>
+        <li><a href="#dieu-khoan">Điều khoản sử dụng</a></li>
+        <li><a href="#quan-tri">Quản trị</a></li>
+      </ul>
+    </nav>
     <form class="codebox" id="foot-code" autocomplete="off">
-      <label for="foot-code-in">Nhập mã trên thẻ màu</label>
+      <label for="foot-code-in">Nhập mã trên thẻ</label>
       <div class="codebox-row">
-        <input id="foot-code-in" name="code" placeholder="VD: NGHE" maxlength="12" spellcheck="false">
+        <input id="foot-code-in" name="code" placeholder="VD: KHAMPHA" maxlength="12" spellcheck="false">
         <button class="btn btn-sm" type="submit">Mở</button>
       </div>
       <p class="codebox-msg" aria-live="polite"></p>
     </form>
-    <nav class="foot-links" aria-label="Liên kết cuối trang">
-      <a href="#ve-ecocrayon">Về ECOCRAYON</a>
-      <a href="#phu-huynh">Phụ huynh &amp; giáo viên</a>
-      <a href="#tai-che">Góc tái chế</a>
-      <a href="#ma-qr">In thẻ mã QR</a>
-    </nav>
+    <p class="foot-copy">© <span id="foot-year">2026</span> ECOCRAYON · Không quảng cáo · Dữ liệu của bé chỉ lưu trên máy này</p>
   </div>
 </footer>
 
 <nav class="tabbar" aria-label="Điều hướng nhanh">
-  <a href="#vuon-mau" data-nav="mau"><span class="tb-ico" data-ico="mau"></span>Màu</a>
-  <a href="#tro-choi" data-nav="choi"><span class="tb-ico" data-ico="choi"></span>Chơi</a>
-  <a href="#to-mau" data-nav="to"><span class="tb-ico" data-ico="to"></span>Tô</a>
-  <a href="#thu-thach" data-nav="thuthach"><span class="tb-ico" data-ico="thuthach"></span>Thử thách</a>
-  <a href="#so-cua-be" data-nav="so"><span class="tb-ico" data-ico="so"></span>Sổ của bé</a>
+  <a href="#trang-chu" data-nav="home"><span class="tb-ico" data-ico="home"></span><span class="tb-lbl">Trang chủ</span></a>
+  <a href="#kham-pha" data-nav="khampha"><span class="tb-ico" data-ico="khampha"></span><span class="tb-lbl">Khám phá</span></a>
+  <a href="#tro-choi" data-nav="choi"><span class="tb-ico" data-ico="choi"></span><span class="tb-lbl">Trò chơi</span></a>
+  <a href="#ho-chieu" data-nav="hochieu"><span class="tb-ico" data-ico="hochieu"></span><span class="tb-lbl">Hộ chiếu</span></a>
+  <a href="#dang-nhap" data-nav="taikhoan" id="tab-account"><span class="tb-ico"></span><span class="tb-lbl">Hồ sơ</span></a>
 </nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -97,10 +124,19 @@
 
 <script src="js/vendor/qrcode.min.js"></script>
 <script src="js/data.js"></script>
+<script src="js/zones.js"></script>
+<script src="js/content.js"></script>
 <script src="js/art.js"></script>
+<script src="js/art2.js"></script>
+<script src="js/db.js"></script>
 <script src="js/app.js"></script>
+<script src="js/world.js"></script>
+<script src="js/zone-games.js"></script>
 <script src="js/games.js"></script>
 <script src="js/studio.js"></script>
+<script src="js/account.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/admin.js"></script>
 <script>EC.start();</script>
 </body>
 </html>

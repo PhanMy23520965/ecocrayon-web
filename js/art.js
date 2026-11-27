@@ -18,6 +18,9 @@
   function p(d, fill, extra) { return '<path d="' + d + '" fill="' + (fill || 'none') + '"' + (extra || '') + '/>'; }
   function line(d, color, w) { return '<path d="' + d + '" fill="none" stroke="' + (color || INK) + '"' + (w ? ' stroke-width="' + w + '"' : '') + '/>'; }
   A.svg = svg;
+  /* Cho các file hình khác (art2.js) dùng chung bút vẽ và kho hình. */
+  A.h = { svg: svg, g: g, el: el, ci: ci, p: p, line: line };
+  A.EXTRA = {};
 
   /* ---------- Nguyên liệu (120×120) ---------- */
   var ING = {
@@ -165,11 +168,19 @@
 
   A.thing = function (id, cls, label) {
     if (id.indexOf('ing-') === 0) return A.ingredient(id.slice(4), cls, label);
-    var f = NAT[id] || WASTE[id] || BADGE[id];
+    var f = NAT[id] || WASTE[id] || BADGE[id] || A.EXTRA[id];
     if (!f) return '';
     return svg('0 0 64 64', f(), 'thing ' + (cls || ''), label);
   };
-  A.has = function (id) { return id.indexOf('ing-') === 0 ? !!ING[id.slice(4)] : !!(NAT[id] || WASTE[id] || BADGE[id]); };
+  A.has = function (id) { id = String(id || ''); return id.indexOf('ing-') === 0 ? !!ING[id.slice(4)] : !!(NAT[id] || WASTE[id] || BADGE[id] || A.EXTRA[id]); };
+  /* Phần ruột của một hình (không có thẻ <svg> ngoài) để lồng vào hình lớn hơn. */
+  A.innerOf = function (id) {
+    id = String(id || '');
+    if (id.indexOf('ing-') === 0) return ING[id.slice(4)] ? { vb: '0 0 120 120', inner: ING[id.slice(4)]() } : null;
+    var f = NAT[id] || WASTE[id] || BADGE[id] || A.EXTRA[id];
+    return f ? { vb: '0 0 64 64', inner: f() } : null;
+  };
+  A.ids = function () { return Object.keys(NAT).concat(Object.keys(WASTE), Object.keys(BADGE), Object.keys(A.EXTRA), Object.keys(ING).map(function (k) { return 'ing-' + k; })); };
 
   /* ---------- Thùng rác (100×110) ---------- */
   A.bin = function (b) {
@@ -202,17 +213,18 @@
   };
 
   /* ---------- Linh vật Bé Sáp (120×160) ---------- */
-  A.mascot = function (mood, cls) {
+  A.mascot = function (mood, cls, vb) { return svg(vb || '0 0 120 160', A.mascotInner(mood), 'mascot ' + (cls || '')); };
+  A.mascotInner = function (mood) {
     var mouth = {
       happy: line('M53 99 Q60 106 67 99'),
       wow: el(60, 101, 4, 5, '#7A2E2E'),
       sad: line('M54 103 Q60 97 66 103'),
       think: line('M55 101 L65 100')
-    }[mood || 'happy'];
+    }[mood] || line('M53 99 Q60 106 67 99');
     var eyes = mood === 'think'
       ? ci(53, 86, 3.6, INK) + ci(69, 86, 3.6, INK)
       : ci(52, 89, 4.2, INK) + ci(68, 89, 4.2, INK) + ci(53.5, 87.5, 1.3, '#FFFFFF', ' stroke="none"') + ci(69.5, 87.5, 1.3, '#FFFFFF', ' stroke="none"');
-    return svg('0 0 120 160', g(3,
+    return g(3,
       line('M60 22 Q58 14 62 8', '#3E7A2E', 3) +
       p('M61 12 C64 2 78 -1 90 4 C85 15 72 18 61 12 Z', '#6CB04F') +
       p('M40 54 L57 23 Q60 18 63 23 L80 54 Z', '#4C9A3B') +
@@ -222,7 +234,7 @@
       line('M38 96 Q26 92 20 80') + line('M82 96 Q94 92 100 82') + ci(19, 78, 5, '#4C9A3B') + ci(101, 80, 5, '#4C9A3B') +
       el(50, 148, 10, 6, '#3E8530') + el(70, 148, 10, 6, '#3E8530')) +
       ci(46, 99, 4.5, '#F2A0A0', ' opacity=".8"') + ci(74, 99, 4.5, '#F2A0A0', ' opacity=".8"') +
-      '<g stroke="' + INK + '" stroke-width="3" stroke-linecap="round" fill="none">' + eyes + mouth + '</g>', 'mascot ' + (cls || ''));
+      '<g stroke="' + INK + '" stroke-width="3" stroke-linecap="round" fill="none">' + eyes + mouth + '</g>';
   };
 
   /* ---------- Hộp bút ở trang chủ (440×380) ---------- */

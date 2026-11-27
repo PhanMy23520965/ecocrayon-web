@@ -77,7 +77,49 @@ EC.COLORS = [
 EC.colorById = function (id) { return EC.COLORS.find(function (c) { return c.id === id; }); };
 
 /* Mã in trên thẻ (dự phòng khi không quét được QR) */
-EC.CODES = { DEN: 'mau-den', NGHE: 'mau-nghe', LADUA: 'mau-la-dua', BIEC: 'mau-dau-biec', BAPCAI: 'mau-bap-cai', CAROT: 'mau-ca-rot', TAICHE: 'tai-che', TOMAU: 'to-mau', TROCHOI: 'tro-choi' };
+EC.CODES = {
+  DEN: 'mau-den', NGHE: 'mau-nghe', LADUA: 'mau-la-dua', BIEC: 'mau-dau-biec', BAPCAI: 'mau-bap-cai', CAROT: 'mau-ca-rot',
+  TAICHE: 'tai-che', TOMAU: 'to-mau', TROCHOI: 'tro-choi',
+  KHAMPHA: 'kham-pha', HOCHIEU: 'ho-chieu', HUONGDAN: 'huong-dan',
+  SACMAU: 'vung/sac-mau', THINGHIEM: 'vung/phep-thuat', THANHPHO: 'vung/tai-che', HANHTINH: 'vung/hanh-tinh'
+};
+/* Mã chữ của từng vùng đất (in trên thẻ QR) */
+EC.zoneCode = function (zoneId) { for (var k in EC.CODES) if (EC.CODES[k] === 'vung/' + zoneId) return k; return ''; };
+
+/* Tên gọi của các hình (dùng cho trò Ghép đôi và nhãn đọc màn hình) */
+EC.ART_NAMES = {
+  rabbit: 'Thỏ', bee: 'Ong', seed: 'Hạt giống', sprout: 'Mầm cây', cloudrain: 'Mây mưa', tree: 'Cây xanh', flower: 'Bông hoa',
+  fish: 'Cá', turtle: 'Rùa biển', crab: 'Cua', jelly: 'Sứa', bird: 'Chim', butterfly: 'Bướm', frog: 'Ếch', mushroom: 'Nấm',
+  sun: 'Mặt trời', drop: 'Giọt nước', earth: 'Trái Đất', bulb: 'Bóng đèn', factory: 'Nhà máy', bag: 'Túi nilon', net: 'Lưới cũ',
+  vaivun: 'Vải vụn', day: 'Sợi dây', boat: 'Thuyền', bush: 'Bụi cây', 'ing-den': 'Củ dền', 'ing-nghe': 'Củ nghệ', 'ing-la-dua': 'Lá dứa',
+  'ing-bap-cai': 'Bắp cải tím', 'b-crayon': 'Bút sáp', 'b-star': 'Ngôi sao', 'b-recycle': 'Tái chế', 'b-rainbow': 'Cầu vồng'
+};
+
+/* Thông tin sản phẩm (trang chủ và trang Giới thiệu) */
+EC.PRODUCT = {
+  name: 'Bộ màu sáp ECOCRAYON',
+  intro: 'Bút sáp lấy màu từ rau củ, đựng trong hộp giấy tái chế, kèm sổ tô màu, thẻ màu và mã QR mở ra thế giới khám phá.',
+  base: 'Màu được thử nghiệm từ thực vật. Nền sáp, tỷ lệ phối trộn và độ bền màu đang được nhóm hoàn thiện ở giai đoạn mẫu thử.',
+  features: [
+    'Sáu màu từ thực vật: củ dền, nghệ, lá dứa, hoa đậu biếc, bắp cải tím, cà rốt.',
+    'Thân bút to, vừa tay bé, tô êm và dễ tô chồng màu.',
+    'Hộp và khay từ giấy tái chế, có vách ngăn giữ bút không lăn, không gãy.',
+    'Kèm sổ tô màu về thiên nhiên và thẻ màu có mã QR.'
+  ],
+  eco: [
+    'Thử nghiệm chất tạo màu thực vật thay vì chỉ dùng màu công nghiệp.',
+    'Bao bì từ carton, giấy báo cũ; phụ kiện từ lõi giấy, vải vụn.',
+    'Mỗi bộ bút đi kèm hoạt động phân loại rác và tái sử dụng.',
+    'Trang học trực tuyến cập nhật được, không phải in thêm giấy.'
+  ],
+  usage: [
+    'Mở hộp, chọn một cây sáp yêu thích.',
+    'Tô nhẹ tay cho màu nhạt, tô mạnh tay cho màu đậm.',
+    'Tô chồng hai màu để ra màu mới.',
+    'Quét mã QR trên thẻ để học và chơi cùng màu đó.',
+    'Dùng xong cất bút vào hộp, để nơi khô mát, tránh nắng.'
+  ]
+};
 
 /* Đồ vật trong tự nhiên cho hoạt động "Tìm bạn cùng màu" */
 EC.NATURE = {
@@ -220,7 +262,7 @@ EC.DIY = [
   }
 ];
 
-/* ---------- Huy hiệu ---------- */
+/* ---------- Nhãn dán (thưởng cho các hoạt động thêm; huy hiệu chính của 4 vùng đất nằm trong js/zones.js) ---------- */
 EC.STICKERS = [
   { id: 'mau-den', name: 'Bạn của Củ Dền', how: 'Hoàn thành trang màu đỏ hồng', icon: 'ing-den' },
   { id: 'mau-nghe', name: 'Bạn của Nghệ', how: 'Hoàn thành trang màu vàng', icon: 'ing-nghe' },
@@ -242,16 +284,15 @@ EC.STICKERS = [
   { id: 'kheo-tay', name: 'Thợ tái chế khéo tay', how: 'Làm xong một món đồ tái chế', icon: 'b-recycle' }
 ];
 
-/* Mốc lớn lên của cây */
+/* Mốc lớn lên của cây trong hộ chiếu (theo điểm kinh nghiệm XP) */
 EC.TREE = [
-  { at: 0, name: 'Hạt giống', say: 'Hạt đang ngủ. Chơi để đánh thức hạt nhé!' },
-  { at: 3, name: 'Mầm non', say: 'Hạt nảy mầm rồi!' },
-  { at: 8, name: 'Cây con', say: 'Cây con đang lớn.' },
-  { at: 16, name: 'Cây nhỏ', say: 'Cây đã có thân chắc khỏe.' },
-  { at: 26, name: 'Cây lớn', say: 'Cây lớn rồi! Bé nhận được giấy khen.' },
-  { at: 38, name: 'Cây cầu vồng', say: 'Cây ra quả đủ 6 màu!' }
+  { xp: 0, name: 'Hạt giống', say: 'Hạt đang ngủ. Chơi để đánh thức hạt nhé!' },
+  { xp: 20, name: 'Mầm non', say: 'Hạt nảy mầm rồi!' },
+  { xp: 80, name: 'Cây con', say: 'Cây con đang lớn.' },
+  { xp: 250, name: 'Cây nhỏ', say: 'Cây đã có thân chắc khỏe.' },
+  { xp: 550, name: 'Cây lớn', say: 'Cây lớn rồi!' },
+  { xp: 1000, name: 'Cây cầu vồng', say: 'Cây ra quả đủ 6 màu!' }
 ];
-EC.CERT_AT = 26;
 
 /* ---------- Tranh tô màu ---------- */
 EC.PAGES = [
@@ -289,7 +330,7 @@ EC.VALUES = [
 
 EC.ROADMAP = [
   { stage: 'Giai đoạn 1', name: 'Mã QR trên hộp và thẻ màu', what: 'Quét để xem giới thiệu nguyên liệu, câu đố và hướng dẫn hoạt động.', state: 'now' },
-  { stage: 'Giai đoạn 2', name: 'Website trò chơi', what: 'Câu đố, ghép cặp màu với nguyên liệu, phân loại rác. Chính là trang bạn đang dùng.', state: 'now' },
+  { stage: 'Giai đoạn 2', name: 'Thế giới khám phá', what: '4 vùng đất, 12 trò chơi, 4 thử thách, hộ chiếu và huy hiệu. Chính là trang bạn đang dùng.', state: 'now' },
   { stage: 'Giai đoạn 3', name: 'AR – thực tế tăng cường', what: 'Quét tranh đã tô để xem mô hình 3D hoặc hoạt cảnh.', state: 'next' },
   { stage: 'Nghiên cứu sau', name: 'AI nhận diện tranh', what: 'Nhận ra chủ đề bức tranh và gợi ý nội dung học phù hợp.', state: 'later' }
 ];
@@ -376,8 +417,9 @@ EC.FAQ = [
   { q: 'Không quét được mã QR thì làm sao?', a: 'Mỗi thẻ có in mã chữ, ví dụ NGHE hoặc DEN. Nhập mã đó vào ô “Nhập mã in trên thẻ” ở trang chủ hoặc cuối trang.' },
   { q: 'Bút có an toàn tuyệt đối không?', a: 'Sản phẩm đang ở giai đoạn mẫu thử. Nhóm chưa có kết quả kiểm nghiệm nên không tuyên bố bút “không độc” hay “an toàn tuyệt đối”. Hãy dùng có giám sát và làm theo hướng dẫn an toàn.' },
   { q: 'Vì sao màu bút không giống hệt màu trên web?', a: 'Màu thực vật đậm nhạt khác nhau tùy cách chiết xuất, tỷ lệ phối trộn và nền sáp. Màu trên màn hình chỉ để minh họa.' },
-  { q: 'Tiến trình của bé có bị mất không?', a: 'Lá và huy hiệu được lưu ngay trên trình duyệt của máy đang dùng. Đổi máy, xóa dữ liệu duyệt web hoặc dùng chế độ ẩn danh thì tiến trình sẽ bắt đầu lại.' },
-  { q: 'Lớp học dùng chung một máy được không?', a: 'Được. Ở Sổ của bé có nút “Bắt đầu lại” để dọn tiến trình trước khi đến lượt bạn khác.' }
+  { q: 'Tiến trình của bé có bị mất không?', a: 'Điểm, sao, huy hiệu và tranh được lưu ngay trên trình duyệt của máy đang dùng, theo từng hồ sơ. Đổi máy, xóa dữ liệu duyệt web hoặc dùng chế độ ẩn danh thì máy mới sẽ không có tiến trình cũ. Ở trang Hồ sơ có nút tải bản sao dữ liệu của bé.' },
+  { q: 'Lớp học dùng chung một máy được không?', a: 'Được. Mỗi bé tạo một hồ sơ riêng (tên đăng nhập và mật khẩu). Bé đăng xuất khi xong lượt để bạn khác đăng nhập. Giáo viên xem tiến độ cả lớp ở trang Quản trị.' },
+  { q: 'Có cần đăng nhập mới chơi được không?', a: 'Không. Bé có thể chơi thử ngay. Muốn giữ sao, huy hiệu và mở Hộ chiếu khám phá thì phụ huynh giúp bé tạo hồ sơ; tiến trình chơi thử được chuyển vào hồ sơ mới.' }
 ];
 
 /* Phiếu quan sát buổi dùng thử (Bước 6 trong kế hoạch) */
@@ -388,4 +430,4 @@ EC.OBS_SCALES = [
   { id: 'len-mau', label: 'Bút lên màu tốt' },
   { id: 'do-cung', label: 'Bút cứng, ít gãy' }
 ];
-EC.OBS_ACTS = ['Trang màu (QR)', 'Ghép cặp', 'Phân loại rác', 'Đố vui', 'Bếp pha màu', 'Thí nghiệm đổi màu', 'Tô màu', 'Thử thách xanh', 'Đồ tái chế'];
+EC.OBS_ACTS = ['Bản đồ 4 vùng đất', 'Vương quốc sắc màu', 'Phòng thí nghiệm phép thuật', 'Thành phố tái chế', 'Hành tinh xanh', 'Hộ chiếu khám phá', 'Trang màu (QR)', 'Ghép cặp', 'Phân loại rác', 'Đố vui', 'Bếp pha màu', 'Thí nghiệm đổi màu', 'Tô màu', 'Thử thách xanh', 'Đồ tái chế'];
